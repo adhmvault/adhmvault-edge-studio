@@ -1609,10 +1609,23 @@
         // POLLINATIONS IMAGE HELPER - Image generation (Free)
         // ═══════════════════════════════════════════════════════════
         async function pollinationsFetch(promptText) {
-            const encoded = encodeURIComponent(promptText);
-            const seed = Math.floor(Math.random() * 99999);
-            const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&referrer=adhmvaultedgestudio.netlify.app`;
-            return imageUrl;
+            return generateHFImage(promptText);
+        }
+
+        async function generateHFImage(promptText) {
+            const res = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inputs: promptText.substring(0, 500) })
+            });
+            if (!res.ok) throw new Error('Image failed: ' + res.status);
+            const blob = await res.blob();
+            const base64 = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+            return base64;
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -1985,13 +1998,10 @@
                     const parts = body.contents[0]?.parts || [];
                     promptText = parts.find(p => p.text)?.text || '';
                 }
-                const seed = Math.floor(Math.random() * 99999);
-                const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app&nofeed=true`;
+                const base64 = await generateHFImage(promptText);
                 return { 
-                    predictions: [{ bytesBase64Encoded: '' }],
-                    candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: '' } }] } }],
-                    imageUrl: imageUrl
+                    predictions: [{ bytesBase64Encoded: base64 }],
+                    candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: base64 } }] } }]
                 };
             }
 
@@ -2319,10 +2329,10 @@
                 const res = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const data = JSON.parse((res.candidates[0].content.parts[0].text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim().match(/[\[{][\s\S]*[\]}]/)?.[0] || res.candidates[0].content.parts[0].text));
 
-                document.getElementById('prodInput1').value = data.name || "";
-                document.getElementById('prodInput2').value = data.material || "";
-                document.getElementById('prodInput3').value = data.design || "";
-                document.getElementById('prodInput4').value = data.background || "";
+                document.getElementById('prodInput1').value = typeof data.name === 'string' ? data.name : (data.name?.value || data.name?.toString() || "");
+                document.getElementById('prodInput2').value = typeof data.material === 'string' ? data.material : (data.material?.value || data.material?.toString() || "");
+                document.getElementById('prodInput3').value = typeof data.design === 'string' ? data.design : (data.design?.value || data.design?.toString() || "");
+                document.getElementById('prodInput4').value = typeof data.background === 'string' ? data.background : (data.background?.value || data.background?.toString() || "");
 
                 showMessage("Maklumat Produk Berjaya Diekstrak! Menjana 3D...", "info");
 
@@ -2517,20 +2527,15 @@
             document.getElementById(loaderId).classList.remove('hidden');
             
             try {
-                const seed = Math.floor(Math.random() * 99999);
-                const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app&nofeed=true`;
-                
-                await new Promise((resolve, reject) => {
+                const base64 = await generateHFImage(promptText);
+                if(base64) {
                     const imgEl = document.getElementById(imgElementId);
-                    imgEl.onload = () => {
-                        imgEl.dataset.base64 = '';
-                        imgEl.classList.remove('hidden');
-                        resolve();
-                    };
-                    imgEl.onerror = () => reject(new Error('Image load failed'));
-                    imgEl.src = imageUrl;
-                });
+                    imgEl.src = `data:image/jpeg;base64,${base64}`;
+                    imgEl.dataset.base64 = base64;
+                    imgEl.classList.remove('hidden');
+                } else {
+                    throw new Error("No image data");
+                }
             } catch (e) {
                 console.error(e);
                 showMessage('Gagal jana imej. Cuba lagi.', 'error');
@@ -2987,7 +2992,6 @@
                         response = await response.json();
                     }
                     const result = response;
-                    if (result.imageUrl) return { isUrl: true, url: result.imageUrl };
                     if (result.predictions && result.predictions.length > 0) base64String = result.predictions[0].bytesBase64Encoded || result.predictions[0].b64_json;
                  }
                  return base64String;
@@ -3003,16 +3007,11 @@
 
                 for(let i=0; i<4; i++) {
                     const idx = i+1;
-                    const imgResult = results[i];
-                    if (imgResult) {
+                    const base64String = results[i];
+                    if (base64String) {
                         const imgEl = document.getElementById(`imgBox${boxIndex}_${idx}`);
-                        if (imgResult.isUrl) {
-                            imgEl.src = imgResult.url;
-                            imgEl.dataset.base64 = '';
-                        } else {
-                            imgEl.dataset.base64 = imgResult;
-                            imgEl.src = `data:image/png;base64,${imgResult}`;
-                        }
+                        imgEl.dataset.base64 = base64String;
+                        imgEl.src = `data:image/png;base64,${base64String}`;
                         
                         document.getElementById(`loader${boxIndex}_${idx}`).classList.remove('flex');
                         document.getElementById(`loader${boxIndex}_${idx}`).classList.add('hidden');
@@ -3269,8 +3268,8 @@
 
             try {
                 const [b1, b2] = await Promise.all([generateSingleImage(), generateSingleImage()]);
-                if(b1) { const el = document.getElementById('brollOut1'); el.src = b1.isUrl ? b1.url : `data:image/png;base64,${b1}`; el.dataset.base64 = b1.isUrl ? '' : b1; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder1').classList.remove('hidden');
-                if(b2) { const el = document.getElementById('brollOut2'); el.src = b2.isUrl ? b2.url : `data:image/png;base64,${b2}`; el.dataset.base64 = b2.isUrl ? '' : b2; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder2').classList.remove('hidden');
+                if(b1) { const el = document.getElementById('brollOut1'); el.src = `data:image/png;base64,${b1}`; el.dataset.base64 = b1; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder1').classList.remove('hidden');
+                if(b2) { const el = document.getElementById('brollOut2'); el.src = `data:image/png;base64,${b2}`; el.dataset.base64 = b2; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder2').classList.remove('hidden');
                 showMessage("Pilihan B-Roll Dijana!", "success");
             } catch(e) {
                 showMessage("Gagal menjana imej B-Roll.", "error");
