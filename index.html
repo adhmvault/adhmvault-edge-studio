@@ -1611,7 +1611,7 @@
         async function pollinationsFetch(promptText) {
             const encoded = encodeURIComponent(promptText);
             const seed = Math.floor(Math.random() * 99999);
-            const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}`;
+            const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo&enhance=true`;
             return imageUrl;
         }
 
@@ -1987,14 +1987,12 @@
                 }
                 const seed = Math.floor(Math.random() * 99999);
                 const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo&enhance=true`;
                 const imgRes = await fetch(imageUrl);
                 const blob = await imgRes.blob();
                 const base64 = await new Promise(resolve => {
                     const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.readAsDataURL(blob);
-                });
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);                });
                 return { 
                     predictions: [{ bytesBase64Encoded: base64 }],
                     candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: base64 } }] } }]
@@ -2445,7 +2443,7 @@
                 // Guna Pollinations (percuma, no API key)
                 const seed = Math.floor(Math.random() * 99999);
                 const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo&enhance=true`;
                 
                 const imgRes = await fetch(imageUrl);
                 const blob = await imgRes.blob();
