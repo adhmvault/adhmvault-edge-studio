@@ -2436,36 +2436,48 @@
         }
 
         async function generateUniversalBananaImage(promptText, imgElementId, loaderId, refImagesArray) {
-            document.getElementById(imgElementId).classList.add('hidden');
-            document.getElementById(loaderId).classList.remove('hidden');
+            const imgEl = document.getElementById(imgElementId);
+            const loaderEl = document.getElementById(loaderId);
+            imgEl.classList.add('hidden');
+            loaderEl.classList.remove('hidden');
             
             try {
-                // Guna Pollinations (percuma, no API key)
                 const seed = Math.floor(Math.random() * 99999);
                 const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo&enhance=true`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo`;
                 
-                const imgRes = await fetch(imageUrl);
-                const blob = await imgRes.blob();
-                const base64 = await new Promise(resolve => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.readAsDataURL(blob);
+                await new Promise((resolve, reject) => {
+                    const tempImg = new Image();
+                    tempImg.crossOrigin = 'anonymous';
+                    tempImg.onload = () => {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = tempImg.naturalWidth || 576;
+                            canvas.height = tempImg.naturalHeight || 1024;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(tempImg, 0, 0);
+                            const base64 = canvas.toDataURL('image/jpeg').split(',')[1];
+                            imgEl.src = `data:image/jpeg;base64,${base64}`;
+                            imgEl.dataset.base64 = base64;
+                        } catch(canvasErr) {
+                            imgEl.src = imageUrl;
+                        }
+                        imgEl.classList.remove('hidden');
+                        resolve();
+                    };
+                    tempImg.onerror = () => {
+                        imgEl.src = imageUrl;
+                        imgEl.classList.remove('hidden');
+                        resolve();
+                    };
+                    tempImg.src = imageUrl;
+                    setTimeout(() => reject(new Error('Timeout')), 30000);
                 });
-                
-                if(base64) {
-                    const imgEl = document.getElementById(imgElementId);
-                    imgEl.src = `data:image/jpeg;base64,${base64}`;
-                    imgEl.dataset.base64 = base64;
-                    imgEl.classList.remove('hidden');
-                } else {
-                    throw new Error("No image data");
-                }
             } catch (e) {
                 console.error(e);
                 showMessage('Gagal jana imej. Cuba lagi.', 'error');
             } finally {
-                document.getElementById(loaderId).classList.add('hidden');
+                loaderEl.classList.add('hidden');
             }
         }
 
