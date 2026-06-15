@@ -1987,17 +1987,11 @@
                 }
                 const seed = Math.floor(Math.random() * 99999);
                 const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app`;
-                const imgRes = await fetch(imageUrl);
-                const blob = await imgRes.blob();
-                const base64 = await new Promise(resolve => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.readAsDataURL(blob);
-                });
+                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app&nofeed=true`;
                 return { 
-                    predictions: [{ bytesBase64Encoded: base64 }],
-                    candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: base64 } }] } }]
+                    predictions: [{ bytesBase64Encoded: '' }],
+                    candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: '' } }] } }],
+                    imageUrl: imageUrl
                 };
             }
 
@@ -2523,27 +2517,20 @@
             document.getElementById(loaderId).classList.remove('hidden');
             
             try {
-                // Guna Pollinations (percuma, no API key)
                 const seed = Math.floor(Math.random() * 99999);
                 const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app&nofeed=true`;
                 
-                const imgRes = await fetch(imageUrl);
-                const blob = await imgRes.blob();
-                const base64 = await new Promise(resolve => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.readAsDataURL(blob);
-                });
-                
-                if(base64) {
+                await new Promise((resolve, reject) => {
                     const imgEl = document.getElementById(imgElementId);
-                    imgEl.src = `data:image/jpeg;base64,${base64}`;
-                    imgEl.dataset.base64 = base64;
-                    imgEl.classList.remove('hidden');
-                } else {
-                    throw new Error("No image data");
-                }
+                    imgEl.onload = () => {
+                        imgEl.dataset.base64 = '';
+                        imgEl.classList.remove('hidden');
+                        resolve();
+                    };
+                    imgEl.onerror = () => reject(new Error('Image load failed'));
+                    imgEl.src = imageUrl;
+                });
             } catch (e) {
                 console.error(e);
                 showMessage('Gagal jana imej. Cuba lagi.', 'error');
@@ -3000,6 +2987,7 @@
                         response = await response.json();
                     }
                     const result = response;
+                    if (result.imageUrl) return { isUrl: true, url: result.imageUrl };
                     if (result.predictions && result.predictions.length > 0) base64String = result.predictions[0].bytesBase64Encoded || result.predictions[0].b64_json;
                  }
                  return base64String;
@@ -3015,11 +3003,16 @@
 
                 for(let i=0; i<4; i++) {
                     const idx = i+1;
-                    const base64String = results[i];
-                    if (base64String) {
+                    const imgResult = results[i];
+                    if (imgResult) {
                         const imgEl = document.getElementById(`imgBox${boxIndex}_${idx}`);
-                        imgEl.dataset.base64 = base64String;
-                        imgEl.src = `data:image/png;base64,${base64String}`;
+                        if (imgResult.isUrl) {
+                            imgEl.src = imgResult.url;
+                            imgEl.dataset.base64 = '';
+                        } else {
+                            imgEl.dataset.base64 = imgResult;
+                            imgEl.src = `data:image/png;base64,${imgResult}`;
+                        }
                         
                         document.getElementById(`loader${boxIndex}_${idx}`).classList.remove('flex');
                         document.getElementById(`loader${boxIndex}_${idx}`).classList.add('hidden');
@@ -3276,8 +3269,8 @@
 
             try {
                 const [b1, b2] = await Promise.all([generateSingleImage(), generateSingleImage()]);
-                if(b1) { const el = document.getElementById('brollOut1'); el.src = `data:image/png;base64,${b1}`; el.dataset.base64 = b1; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder1').classList.remove('hidden');
-                if(b2) { const el = document.getElementById('brollOut2'); el.src = `data:image/png;base64,${b2}`; el.dataset.base64 = b2; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder2').classList.remove('hidden');
+                if(b1) { const el = document.getElementById('brollOut1'); el.src = b1.isUrl ? b1.url : `data:image/png;base64,${b1}`; el.dataset.base64 = b1.isUrl ? '' : b1; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder1').classList.remove('hidden');
+                if(b2) { const el = document.getElementById('brollOut2'); el.src = b2.isUrl ? b2.url : `data:image/png;base64,${b2}`; el.dataset.base64 = b2.isUrl ? '' : b2; el.classList.remove('hidden'); } else document.getElementById('brollPlaceholder2').classList.remove('hidden');
                 showMessage("Pilihan B-Roll Dijana!", "success");
             } catch(e) {
                 showMessage("Gagal menjana imej B-Roll.", "error");
