@@ -333,7 +333,7 @@
                     </div>
 
                     <button id="btnAutoProd" onclick="processAutoProduct()" class="w-full mb-3 bg-gradient-to-r from-blue-700 to-indigo-600 hover:from-blue-600 text-white font-bold py-2.5 px-4 rounded transition-all text-xs tracking-wide shadow-lg flex items-center justify-center">
-                        <i class="fas fa-cogs mr-2"></i> JANA 4 SUDUT PRODUK (ISI MAKLUMAT DAHULU)
+                        <i class="fas fa-cogs mr-2"></i> EKSTRAK VISION & JANA 4 SUDUT PRODUK
                     </button>
 
                     <!-- Auto-filled Specs -->
@@ -1611,7 +1611,7 @@
         async function pollinationsFetch(promptText) {
             const encoded = encodeURIComponent(promptText);
             const seed = Math.floor(Math.random() * 99999);
-            const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo&enhance=true`;
+            const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&referrer=adhmvaultedgestudio.netlify.app`;
             return imageUrl;
         }
 
@@ -1987,12 +1987,14 @@
                 }
                 const seed = Math.floor(Math.random() * 99999);
                 const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo&enhance=true`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app`;
                 const imgRes = await fetch(imageUrl);
                 const blob = await imgRes.blob();
                 const base64 = await new Promise(resolve => {
                     const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);                });
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(blob);
+                });
                 return { 
                     predictions: [{ bytesBase64Encoded: base64 }],
                     candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: base64 } }] } }]
@@ -2206,19 +2208,38 @@
             setButtonLoading('btnAutoBRollProd', true);
 
             try {
-                const p1 = document.getElementById('brollProdInput1').value.trim();
-                const p2 = document.getElementById('brollProdInput2').value.trim();
-                const p3 = document.getElementById('brollProdInput3').value.trim();
+                showMessage("Sedang mengekstrak visi Produk B-Roll secara mendalam (100% Ketepatan)...", "info");
+                
+                const parts = [{ text: "Analyze the product from these multiple angles/images. Return ONLY a valid JSON object describing it exactly for a high-end macro B-Roll commercial shot. Focus on details to achieve 100% human-level accuracy." }];
+                pipelineBRollImages.forEach(img => { parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } }); });
+                
+                const payload = {
+                    contents: [{ role: "user", parts: parts }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                name: { type: "STRING", description: "Exact product name, brand, and type" },
+                                material: { type: "STRING", description: "Colors, textures, and material properties" },
+                                design: { type: "STRING", description: "Shape, texts, labels, and physical features" }
+                            }
+                        }
+                    }
+                };
 
-                if (!p1 && !p2 && !p3) {
-                    showMessage("⚠️ Sila isi maklumat Produk B-Roll secara manual (Nama, Warna/Material, Reka Bentuk) dahulu, kemudian klik butang ini semula.", "error");
-                    return;
-                }
+                const url = `/.netlify/functions/groq`;
+                const res = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = JSON.parse((res.candidates[0].content.parts[0].text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim().match(/[\[{][\s\S]*[\]}]/)?.[0] || res.candidates[0].content.parts[0].text));
 
-                showMessage("Gambar B-Roll dimuat naik sebagai rujukan visual. Maklumat manual digunakan.", "success");
+                document.getElementById('brollProdInput1').value = data.name || "";
+                document.getElementById('brollProdInput2').value = data.material || "";
+                document.getElementById('brollProdInput3').value = data.design || "";
+
+                showMessage("Maklumat Produk B-Roll Berjaya Diekstrak & Siap Digunakan!", "success");
             } catch (error) {
                 console.error(error);
-                showMessage(`Gagal memproses Produk B-Roll. Sila cuba lagi.`, 'error');
+                showMessage(`Gagal memproses Produk B-Roll. Sila pastikan gambar jelas.`, 'error');
             } finally {
                 setButtonLoading('btnAutoBRollProd', false, originalBtn);
             }
@@ -2231,18 +2252,39 @@
             setButtonLoading('btnAutoInfo', true);
 
             try {
-                const f1 = document.getElementById('fact1').value.trim();
-                const f2 = document.getElementById('fact2').value.trim();
-                const f3 = document.getElementById('fact3').value.trim();
-                const f4 = document.getElementById('fact4').value.trim();
-                const f5 = document.getElementById('fact5').value.trim();
+                showMessage("Sedang membaca teks dan mengekstrak info jualan dari gambar...", "info");
+                
+                const parts = [{ text: "Analyze the text and product details in these promotional images, brochures, labels, or ads. Return ONLY a valid JSON object extracting these exact marketing details accurately. STRICT RULE: DO NOT overclaim, hallucinate, or add marketing fluff. ONLY extract factual information explicitly present in the images. Do not make educated guesses for benefits. If a detail is not explicitly written, leave it empty. NO FALSE CLAIMS." }];
+                pipelineInfoImages.forEach(img => { parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } }); });
+                
+                const payload = {
+                    contents: [{ role: "user", parts: parts }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                harga: { type: "STRING", description: "Price, discounts, or promotional offers mentioned" },
+                                kelebihan: { type: "STRING", description: "Main benefits or Unique Selling Points (USPs) of the product" },
+                                bahan: { type: "STRING", description: "Ingredients, materials, or technical specifications" },
+                                sasaran: { type: "STRING", description: "Target audience, specific usage, or specific problems it solves" },
+                                ekstra: { type: "STRING", description: "Extra info like warranty, free gifts, shipping, certifications (e.g. Halal, KKM)" }
+                            }
+                        }
+                    }
+                };
 
-                if (!f1 && !f2 && !f3 && !f4 && !f5) {
-                    showMessage("⚠️ Analisis auto dari gambar tidak tersedia buat masa ini. Sila isi Maklumat Fakta Produk secara manual (Harga, Kelebihan, Bahan, Sasaran, Ekstra).", "error");
-                    return;
-                }
+                const url = `/.netlify/functions/groq`;
+                const res = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = JSON.parse((res.candidates[0].content.parts[0].text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim().match(/[\[{][\s\S]*[\]}]/)?.[0] || res.candidates[0].content.parts[0].text));
 
-                showMessage("Gambar brosur dimuat naik. Maklumat fakta manual telah sedia digunakan.", "success");
+                document.getElementById('fact1').value = data.harga || "";
+                document.getElementById('fact2').value = data.kelebihan || "";
+                document.getElementById('fact3').value = data.bahan || "";
+                document.getElementById('fact4').value = data.sasaran || "";
+                document.getElementById('fact5').value = data.ekstra || "";
+
+                showMessage("Maklumat Fakta Jualan Berjaya Diekstrak Dan Diisi!", "success");
             } catch (error) {
                 console.error(error);
                 showMessage(`Gagal mengekstrak info gambar. Sila cuba lagi.`, 'error');
@@ -2258,18 +2300,38 @@
             setButtonLoading('btnAutoProd', true);
 
             try {
-                // Vision analysis not supported by current backend — use text fields if filled, else prompt user
-                const i1 = document.getElementById('prodInput1').value.trim();
-                const i2 = document.getElementById('prodInput2').value.trim();
-                const i3 = document.getElementById('prodInput3').value.trim();
-                const i4 = document.getElementById('prodInput4').value.trim();
+                showMessage("Sedang mengekstrak visi Produk...", "info");
+                
+                const parts = [{ text: "Analyze the product in these images with extreme photorealistic detail. Return ONLY a valid JSON object describing it exactly." }];
+                pipelineProdImages.forEach(img => { parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } }); });
+                
+                const payload = {
+                    contents: [{ role: "user", parts: parts }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                name: { type: "STRING", description: "Exact product name, brand, and type" },
+                                material: { type: "STRING", description: "Exact colors, textures, materials, and finish" },
+                                design: { type: "STRING", description: "Precise shape, text/labels, and physical design features" },
+                                background: { type: "STRING", description: "Best studio lighting and background to showcase this product" }
+                            }
+                        }
+                    }
+                };
 
-                if (!i1 && !i2 && !i3 && !i4) {
-                    showMessage("⚠️ Sila isi maklumat produk secara manual (Nama, Warna, Reka Bentuk, Latar) dahulu, kemudian klik butang ini semula untuk jana 4 Sudut 3D.", "error");
-                    return;
-                }
+                const url = `/.netlify/functions/groq`;
+                const res = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = JSON.parse((res.candidates[0].content.parts[0].text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim().match(/[\[{][\s\S]*[\]}]/)?.[0] || res.candidates[0].content.parts[0].text));
 
-                showMessage("Gambar dimuat naik sebagai rujukan. Menjana 4 Sudut 3D dari maklumat yang diisi...", "info");
+                document.getElementById('prodInput1').value = data.name || "";
+                document.getElementById('prodInput2').value = data.material || "";
+                document.getElementById('prodInput3').value = data.design || "";
+                document.getElementById('prodInput4').value = data.background || "";
+
+                showMessage("Maklumat Produk Berjaya Diekstrak! Menjana 3D...", "info");
+
                 await generateProductAngles();
             } catch (error) {
                 console.error(error);
@@ -2286,17 +2348,38 @@
             setButtonLoading('btnAutoModel', true);
 
             try {
-                const i1 = document.getElementById('modelInput1').value.trim();
-                const i2 = document.getElementById('modelInput2').value.trim();
-                const i3 = document.getElementById('modelInput3').value.trim();
-                const i4 = document.getElementById('modelInput4').value.trim();
+                showMessage("Sedang mengekstrak visi Model dari gambar...", "info");
+                
+                const parts = [{ text: "Analyze the person/character in these images with extreme photorealistic detail. Return ONLY a valid JSON object describing them exactly." }];
+                pipelineModelImages.forEach(img => { parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } }); });
+                
+                const payload = {
+                    contents: [{ role: "user", parts: parts }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                gender: { type: "STRING", description: "Exact gender, age, and ethnicity/subject type" },
+                                face: { type: "STRING", description: "Precise facial features, jawline, eye shape, hair style and accessories" },
+                                clothes: { type: "STRING", description: "Exact clothing, fabric, color, and outfit styling" },
+                                vibe: { type: "STRING", description: "Expression, pose, color theme and overall vibe" }
+                            }
+                        }
+                    }
+                };
 
-                if (!i1 && !i2 && !i3 && !i4) {
-                    showMessage("⚠️ Sila isi maklumat Model secara manual (Jantina/Etnik, Wajah, Pakaian, Vibe) dahulu, kemudian klik butang ini semula untuk jana 4 Sudut 3D.", "error");
-                    return;
-                }
+                const url = `/.netlify/functions/groq`;
+                const res = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = JSON.parse((res.candidates[0].content.parts[0].text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim().match(/[\[{][\s\S]*[\]}]/)?.[0] || res.candidates[0].content.parts[0].text));
 
-                showMessage("Gambar dimuat naik sebagai rujukan. Menjana 4 Sudut 3D Model...", "info");
+                document.getElementById('modelInput1').value = data.gender || "";
+                document.getElementById('modelInput2').value = data.face || "";
+                document.getElementById('modelInput3').value = data.clothes || "";
+                document.getElementById('modelInput4').value = data.vibe || "";
+
+                showMessage("Maklumat Model Berjaya Diekstrak! Menjana 4 Sudut 3D...", "info");
+
                 await generateModelAngles(true);
             } catch (error) {
                 console.error(error);
@@ -2436,48 +2519,36 @@
         }
 
         async function generateUniversalBananaImage(promptText, imgElementId, loaderId, refImagesArray) {
-            const imgEl = document.getElementById(imgElementId);
-            const loaderEl = document.getElementById(loaderId);
-            imgEl.classList.add('hidden');
-            loaderEl.classList.remove('hidden');
+            document.getElementById(imgElementId).classList.add('hidden');
+            document.getElementById(loaderId).classList.remove('hidden');
             
             try {
+                // Guna Pollinations (percuma, no API key)
                 const seed = Math.floor(Math.random() * 99999);
                 const encoded = encodeURIComponent(promptText.substring(0, 500));
-                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=turbo`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=576&height=1024&nologo=true&seed=${seed}&model=flux&referrer=adhmvaultedgestudio.netlify.app`;
                 
-                await new Promise((resolve, reject) => {
-                    const tempImg = new Image();
-                    tempImg.crossOrigin = 'anonymous';
-                    tempImg.onload = () => {
-                        try {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = tempImg.naturalWidth || 576;
-                            canvas.height = tempImg.naturalHeight || 1024;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(tempImg, 0, 0);
-                            const base64 = canvas.toDataURL('image/jpeg').split(',')[1];
-                            imgEl.src = `data:image/jpeg;base64,${base64}`;
-                            imgEl.dataset.base64 = base64;
-                        } catch(canvasErr) {
-                            imgEl.src = imageUrl;
-                        }
-                        imgEl.classList.remove('hidden');
-                        resolve();
-                    };
-                    tempImg.onerror = () => {
-                        imgEl.src = imageUrl;
-                        imgEl.classList.remove('hidden');
-                        resolve();
-                    };
-                    tempImg.src = imageUrl;
-                    setTimeout(() => reject(new Error('Timeout')), 30000);
+                const imgRes = await fetch(imageUrl);
+                const blob = await imgRes.blob();
+                const base64 = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(blob);
                 });
+                
+                if(base64) {
+                    const imgEl = document.getElementById(imgElementId);
+                    imgEl.src = `data:image/jpeg;base64,${base64}`;
+                    imgEl.dataset.base64 = base64;
+                    imgEl.classList.remove('hidden');
+                } else {
+                    throw new Error("No image data");
+                }
             } catch (e) {
                 console.error(e);
                 showMessage('Gagal jana imej. Cuba lagi.', 'error');
             } finally {
-                loaderEl.classList.add('hidden');
+                document.getElementById(loaderId).classList.add('hidden');
             }
         }
 
@@ -2916,12 +2987,12 @@
                  
                  if (useVisualInjection) {
                     const payload = { contents: [{ parts: parts }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } };
-                    const url = `/.netlify/functions/image`;
+                    // image direct via apiFetch IMAGE type
                     const response = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     base64String = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
                  } else {
                     const payload = { instances: { prompt: framePrompt }, parameters: { sampleCount: 1, aspectRatio: "9:16" } };
-                    const url = `/.netlify/functions/image`;
+                    // image direct via apiFetch IMAGE type
                     let response = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (!response || response.error) {
                         const fallbackPayload = { instances: { prompt: framePrompt }, parameters: { sampleCount: 1 } };
@@ -3198,7 +3269,7 @@
 
             const generateSingleImage = async () => {
                 const payload = { instances: { prompt: imageSpecificPrompt }, parameters: { sampleCount: 1, aspectRatio: "9:16" } };
-                const url = `/.netlify/functions/image`;
+                // image direct via apiFetch IMAGE type
                 const result = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 return result.predictions && result.predictions.length > 0 ? (result.predictions[0].bytesBase64Encoded || result.predictions[0].b64_json) : null;
             };
