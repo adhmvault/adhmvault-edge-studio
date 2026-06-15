@@ -1613,13 +1613,16 @@
         }
 
         async function generateHFImage(promptText) {
-            const res = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ inputs: promptText.substring(0, 500) })
-            });
+            // Guna Pollinations.ai — free, no API key, CORS-friendly, reliable
+            const seed = Math.floor(Math.random() * 999999);
+            const cleanPrompt = promptText.substring(0, 500).replace(/[^\w\s,.\-()]/g, ' ').trim();
+            const encodedPrompt = encodeURIComponent(cleanPrompt);
+            const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=576&height=1024&seed=${seed}&nologo=true&enhance=true&model=flux`;
+            
+            const res = await fetch(imageUrl);
             if (!res.ok) throw new Error('Image failed: ' + res.status);
             const blob = await res.blob();
+            if (blob.size < 1000) throw new Error('Image blob terlalu kecil — mungkin error');
             const base64 = await new Promise(resolve => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result.split(',')[1]);
